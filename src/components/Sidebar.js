@@ -1,10 +1,18 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { signOut } from '../auth';
 
 const Sidebar = () => {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    signOut();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div className="w-64 h-screen bg-blue-800 text-white p-4">
-      <h1 className="text-xl font-bold mb-8">ABC Invoice Management</h1>
+      <h1 className="text-xl font-bold mb-8">ABC Backflow</h1>
       <nav>
         <ul className="space-y-2">
           <li>
@@ -39,6 +47,13 @@ const Sidebar = () => {
           </li>
         </ul>
       </nav>
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="mt-8 w-full rounded bg-blue-950 px-4 py-2 text-left hover:bg-blue-900"
+      >
+        Log Out
+      </button>
     </div>
   );
 };
