@@ -64,38 +64,40 @@ try {
     if ($route === '/past-due/staging' && $method === 'POST') {
         $data = request_json_body();
 
-        // Full schema — matches ABC_Invoices exactly so SELECT * syncs cleanly
+        // Drop and recreate Staging every upload so there is never a schema
+        // mismatch with an older version of the table.
+        $pdo->exec('DROP TABLE IF EXISTS Staging');
         $pdo->exec("
-            CREATE TABLE IF NOT EXISTS Staging (
-                `Invoice` VARCHAR(255),
-                `Due Date` VARCHAR(255),
-                `Note` TEXT,
-                `Action Date` DATE,
-                `Customer Name` VARCHAR(255),
-                `Service Location` VARCHAR(255),
-                `Rows` VARCHAR(255),
-                `Customer Email` VARCHAR(255),
-                `PO Number` VARCHAR(255),
-                `Phone 1` VARCHAR(255),
-                `Phone 2` VARCHAR(255),
-                `Total Amount` DECIMAL(10,2),
-                `Customer Address` TEXT,
+            CREATE TABLE Staging (
+                `Invoice`                  VARCHAR(255),
+                `Due Date`                 VARCHAR(255),
+                `Note`                     TEXT,
+                `Action Date`              VARCHAR(255),
+                `Customer Name`            VARCHAR(255),
+                `Service Location`         VARCHAR(255),
+                `Rows`                     VARCHAR(255),
+                `Customer Email`           VARCHAR(255),
+                `PO Number`                VARCHAR(255),
+                `Phone 1`                  VARCHAR(255),
+                `Phone 2`                  VARCHAR(255),
+                `Total Amount`             VARCHAR(255),
+                `Customer Address`         TEXT,
                 `Service Location Contact` VARCHAR(255),
-                `Service Location Phone` VARCHAR(255),
-                `Parent Customer Name` VARCHAR(255),
-                `Parent Customer Phone` VARCHAR(255),
-                `Parent Customer Address` TEXT
+                `Service Location Phone`   VARCHAR(255),
+                `Parent Customer Name`     VARCHAR(255),
+                `Parent Customer Phone`    VARCHAR(255),
+                `Parent Customer Address`  TEXT
             )
         ");
 
-        // Add any columns that are missing from older Staging tables
+        // Ensure ABC_Invoices has all the extra columns (safe to run repeatedly)
         $extraCols = [
             'Rows'                     => 'VARCHAR(255)',
             'Customer Email'           => 'VARCHAR(255)',
             'PO Number'                => 'VARCHAR(255)',
             'Phone 1'                  => 'VARCHAR(255)',
             'Phone 2'                  => 'VARCHAR(255)',
-            'Total Amount'             => 'DECIMAL(10,2)',
+            'Total Amount'             => 'VARCHAR(255)',
             'Customer Address'         => 'TEXT',
             'Service Location Contact' => 'VARCHAR(255)',
             'Service Location Phone'   => 'VARCHAR(255)',
@@ -105,22 +107,11 @@ try {
         ];
         foreach ($extraCols as $col => $type) {
             try {
-                $pdo->exec("ALTER TABLE Staging ADD COLUMN `{$col}` {$type}");
-            } catch (Throwable $e) {
-                // Column already exists — safe to ignore
-            }
-        }
-
-        // Also ensure ABC_Invoices has all the extra columns
-        foreach ($extraCols as $col => $type) {
-            try {
                 $pdo->exec("ALTER TABLE ABC_Invoices ADD COLUMN `{$col}` {$type}");
             } catch (Throwable $e) {
                 // Column already exists — safe to ignore
             }
         }
-
-        $pdo->exec('TRUNCATE TABLE Staging');
 
         $stmt = $pdo->prepare('
             INSERT INTO Staging (
@@ -136,24 +127,24 @@ try {
                 continue;
             }
             $stmt->execute([
-                $row['Invoice'] ?? $row['#'] ?? '',
-                $row['Due Date'] ?? '',
-                $row['Note'] ?? '',
-                parse_date_or_null($row['Action Date'] ?? null),
-                $row['Customer Name'] ?? '',
-                $row['Service Location'] ?? '',
-                $row['Rows'] ?? null,
-                $row['Customer Email'] ?? null,
-                $row['PO Number'] ?? null,
-                $row['Phone 1'] ?? null,
-                $row['Phone 2'] ?? null,
-                parse_decimal_or_null($row['Total Amount'] ?? null),
-                $row['Customer Address'] ?? null,
-                $row['Service Location Contact'] ?? null,
-                $row['Service Location Phone'] ?? null,
-                $row['Parent Customer Name'] ?? null,
-                $row['Parent Customer Phone'] ?? null,
-                $row['Parent Customer Address'] ?? null,
+                (string) ($row['Invoice'] ?? $row['#'] ?? ''),
+                (string) ($row['Due Date'] ?? ''),
+                (string) ($row['Note'] ?? ''),
+                (string) ($row['Action Date'] ?? ''),
+                (string) ($row['Customer Name'] ?? ''),
+                (string) ($row['Service Location'] ?? ''),
+                isset($row['Rows'])                     ? (string) $row['Rows']                     : null,
+                isset($row['Customer Email'])           ? (string) $row['Customer Email']           : null,
+                isset($row['PO Number'])                ? (string) $row['PO Number']                : null,
+                isset($row['Phone 1'])                  ? (string) $row['Phone 1']                  : null,
+                isset($row['Phone 2'])                  ? (string) $row['Phone 2']                  : null,
+                isset($row['Total Amount'])             ? (string) $row['Total Amount']             : null,
+                isset($row['Customer Address'])         ? (string) $row['Customer Address']         : null,
+                isset($row['Service Location Contact']) ? (string) $row['Service Location Contact'] : null,
+                isset($row['Service Location Phone'])   ? (string) $row['Service Location Phone']   : null,
+                isset($row['Parent Customer Name'])     ? (string) $row['Parent Customer Name']     : null,
+                isset($row['Parent Customer Phone'])    ? (string) $row['Parent Customer Phone']    : null,
+                isset($row['Parent Customer Address'])  ? (string) $row['Parent Customer Address']  : null,
             ]);
         }
 
