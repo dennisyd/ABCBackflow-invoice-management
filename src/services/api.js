@@ -8,7 +8,8 @@ const apiClient = axios.create({
 
 export const fetchInvoices = async () => {
   try {
-    const response = await apiClient.get('/invoices');
+    // Timestamp param prevents the browser from serving a cached response
+    const response = await apiClient.get('/invoices', { params: { _: Date.now() } });
     return response.data;
   } catch (error) {
     console.error('Error fetching invoices:', error);
