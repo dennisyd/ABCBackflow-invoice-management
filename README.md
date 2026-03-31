@@ -1,6 +1,6 @@
 # ABC Backflow Invoice Management
 
-## First-Time Setup (Do This Once) Ydd
+## First-Time Setup (Do This Once) 
 
 1. Install **Node.js** from https://nodejs.org/ — download the **LTS** version
 2. Run through the Node.js installer with all default options
