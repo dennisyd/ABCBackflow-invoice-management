@@ -54,7 +54,9 @@ const InvoicesManagement = () => {
 
       // Restore the selected invoice from localStorage, if available
       const lastSelectedInvoice = localStorage.getItem('selectedInvoice');
-      const validLastInvoice = data.find((inv) => inv.Invoice === lastSelectedInvoice);
+      // Use String() on both sides: PDO returns Invoice as a JS number but
+      // localStorage always returns a string, so strict === would never match.
+      const validLastInvoice = data.find((inv) => String(inv.Invoice) === String(lastSelectedInvoice));
 
       if (validLastInvoice) {
         handleInvoiceSelect(lastSelectedInvoice, data);
