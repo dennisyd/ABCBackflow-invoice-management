@@ -59,7 +59,7 @@ function send_cors_headers(): void
     }
 
     header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Token');
 }
 
 function maybe_handle_preflight(): void

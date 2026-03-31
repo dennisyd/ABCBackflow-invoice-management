@@ -37,6 +37,9 @@ try {
             parse_date_or_null($body['actionDate'] ?? null),
             $body['invoiceId'] ?? '',
         ]);
+        if ($stmt->rowCount() === 0) {
+            json_response(['error' => 'No invoice was updated'], 404);
+        }
         write_request_log(200, 'invoice_updated');
         json_response(['success' => true, 'message' => 'Invoice updated successfully']);
     }
@@ -113,6 +116,9 @@ try {
             parse_date_or_null($body['actionDate'] ?? null),
             $body['quoteId'] ?? '',
         ]);
+        if ($stmt->rowCount() === 0) {
+            json_response(['error' => 'No quote was updated'], 404);
+        }
         write_request_log(200, 'quote_updated');
         json_response(['success' => true, 'message' => 'Quote updated successfully']);
     }
@@ -208,6 +214,9 @@ try {
             $customerAddressLine1,
             $assemblyLocation,
         ]);
+        if ($stmt->rowCount() === 0) {
+            json_response(['error' => 'No upcoming test row was updated'], 404);
+        }
         write_request_log(200, 'upcoming_test_updated');
         json_response(['success' => true]);
     }

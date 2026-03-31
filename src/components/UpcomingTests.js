@@ -42,6 +42,11 @@ const COLUMNS = [
   'Notification Month',
 ];
 
+const UPCOMING_TEST_STORAGE_KEY = 'selectedUpcomingTestKey';
+
+const buildUpcomingTestKey = (test) =>
+  `${test?.Serial || ''}::${test?.['Customer Address Line 1'] || ''}::${test?.['Assembly Location'] || ''}`;
+
 const UpcomingTests = () => {
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,9 +69,9 @@ const UpcomingTests = () => {
       setTests(data);
       setError(null);
 
-      // Restore last selected serial if possible
-      const lastSerial = localStorage.getItem('selectedSerial');
-      const match = data.find((t) => String(t.Serial) === String(lastSerial));
+      // Restore the last selected row by its full composite key.
+      const lastSelectedKey = localStorage.getItem(UPCOMING_TEST_STORAGE_KEY);
+      const match = data.find((t) => buildUpcomingTestKey(t) === lastSelectedKey);
       if (match) {
         applySelection(match);
       } else if (data.length) {
@@ -94,12 +99,17 @@ const UpcomingTests = () => {
         ? new Date(test['Action Date']).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0]
     );
-    localStorage.setItem('selectedSerial', test.Serial);
+    localStorage.setItem(UPCOMING_TEST_STORAGE_KEY, buildUpcomingTestKey(test));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSerialSelect = (serial) => {
-    const match = tests.find((t) => String(t.Serial) === String(serial));
+  const handleSerialSelect = (serial, testKey = null) => {
+    const match = tests.find((t) => {
+      if (testKey) {
+        return buildUpcomingTestKey(t) === testKey;
+      }
+      return String(t.Serial) === String(serial);
+    });
     if (match) {
       applySelection(match);
     }
@@ -258,7 +268,7 @@ const UpcomingTests = () => {
                   <tr
                     key={`${row.Serial}::${row['Customer Address Line 1'] || ''}::${row['Assembly Location'] || ''}`}
                     className="hover:bg-gray-100 cursor-pointer"
-                    onDoubleClick={() => handleSerialSelect(row.Serial)}
+                    onDoubleClick={() => handleSerialSelect(row.Serial, buildUpcomingTestKey(row))}
                   >
                     {columns.map((col) => (
                       <td
