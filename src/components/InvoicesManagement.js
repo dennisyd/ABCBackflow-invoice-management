@@ -78,33 +78,30 @@ const InvoicesManagement = () => {
     try {
       const response = await updateInvoice(selectedInvoice, note, actionDate);
 
-      if (response?.record) {
-        const updatedRecord = {
-          ...response.record,
-          'Due Date': response.record['Due Date']
-            ? new Date(response.record['Due Date']).toLocaleDateString('en-US')
-            : '',
-          'Action Date': response.record['Action Date']
-            ? new Date(response.record['Action Date']).toLocaleDateString('en-US')
-            : '',
-        };
+      // Patch only Note and Action Date on the existing invoice object so that other
+      // columns (Customer Email, Phone 1, etc.) are not overwritten with nulls from
+      // the API response, which only contains the 6 fields written by the staging process.
+      const savedNote = response?.record?.Note ?? note;
+      const savedActionDate = response?.record?.['Action Date']
+        ? new Date(response.record['Action Date']).toLocaleDateString('en-US')
+        : actionDate
+          ? new Date(actionDate).toLocaleDateString('en-US')
+          : '';
 
-        const nextInvoices = invoices.map((invoice) =>
-          String(invoice.Invoice) === String(selectedInvoice) ? updatedRecord : invoice
-        );
+      const nextInvoices = invoices.map((invoice) => {
+        if (String(invoice.Invoice) !== String(selectedInvoice)) return invoice;
+        return { ...invoice, Note: savedNote, 'Action Date': savedActionDate };
+      });
 
-        setInvoices(nextInvoices);
-        handleInvoiceSelect(selectedInvoice, nextInvoices);
-      }
+      setInvoices(nextInvoices);
+      handleInvoiceSelect(selectedInvoice, nextInvoices);
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      alert(
-        response?.record
-          ? `Invoice updated successfully.\nSaved note: ${response.record.Note || ''}\nSaved action date: ${response.record['Action Date'] || ''}`
-          : 'Invoice updated successfully!'
-      );
+      alert(`Invoice updated successfully.\nSaved note: ${savedNote}\nSaved action date: ${savedActionDate}`);
 
-      loadInvoices();
+      // Await the reload so state is fully refreshed before the function exits,
+      // preventing a race condition between the optimistic update above and the reload.
+      await loadInvoices();
     } catch (error) {
       alert('Failed to update invoice: ' + error.message);
     }
