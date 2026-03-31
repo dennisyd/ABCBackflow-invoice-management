@@ -18,6 +18,7 @@ This folder is a DreamHost-friendly PHP replacement for the local Node API in `s
 
 1. Copy the `dreamhost-api/api` folder contents into your DreamHost site at the web root `api` directory.
 2. Copy `config.example.php` to `config.php`.
+   Or use `config.production.php` as your starting point and rename it to `config.php`.
 3. Fill in your DreamHost MySQL hostname, database name, username, and password.
 4. Set `allowed_origins` to your real Vercel frontend domain and any local dev origin you want to keep.
 5. Visit `/api/test` to confirm the API is live.
@@ -34,7 +35,7 @@ REACT_APP_API_TOKEN=replace-with-the-same-token-as-config.php
 Vercel production:
 
 ```env
-REACT_APP_API_URL=https://abcbackflow.yddconsultinng.com/api
+REACT_APP_API_URL=https://yddconsulting.com/api
 REACT_APP_API_TOKEN=replace-with-the-same-token-as-config.php
 ```
 
