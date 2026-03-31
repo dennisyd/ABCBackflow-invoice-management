@@ -148,8 +148,18 @@ try {
             ]);
         }
 
+        // Debug: count rows inserted and return a sample so we can verify the data
+        $stagingCount = (int) $pdo->query('SELECT COUNT(*) FROM Staging')->fetchColumn();
+        $stagingSample = $pdo->query('SELECT * FROM Staging LIMIT 1')->fetch() ?: [];
+
         write_request_log(200, 'past_due_staging_loaded');
-        json_response(['success' => true]);
+        json_response([
+            'success'       => true,
+            'rows_received' => count($data),
+            'rows_inserted' => $stagingCount,
+            'sample_keys'   => !empty($data) ? array_keys((array) $data[0]) : [],
+            'sample_staged' => $stagingSample,
+        ]);
     }
 
     if ($route === '/past-due/update' && $method === 'POST') {
