@@ -63,6 +63,8 @@ try {
 
     if ($route === '/past-due/staging' && $method === 'POST') {
         $data = request_json_body();
+
+        // Full schema — matches ABC_Invoices exactly so SELECT * syncs cleanly
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS Staging (
                 `Invoice` VARCHAR(255),
@@ -70,14 +72,63 @@ try {
                 `Note` TEXT,
                 `Action Date` DATE,
                 `Customer Name` VARCHAR(255),
-                `Service Location` VARCHAR(255)
+                `Service Location` VARCHAR(255),
+                `Rows` VARCHAR(255),
+                `Customer Email` VARCHAR(255),
+                `PO Number` VARCHAR(255),
+                `Phone 1` VARCHAR(255),
+                `Phone 2` VARCHAR(255),
+                `Total Amount` DECIMAL(10,2),
+                `Customer Address` TEXT,
+                `Service Location Contact` VARCHAR(255),
+                `Service Location Phone` VARCHAR(255),
+                `Parent Customer Name` VARCHAR(255),
+                `Parent Customer Phone` VARCHAR(255),
+                `Parent Customer Address` TEXT
             )
         ");
+
+        // Add any columns that are missing from older Staging tables
+        $extraCols = [
+            'Rows'                     => 'VARCHAR(255)',
+            'Customer Email'           => 'VARCHAR(255)',
+            'PO Number'                => 'VARCHAR(255)',
+            'Phone 1'                  => 'VARCHAR(255)',
+            'Phone 2'                  => 'VARCHAR(255)',
+            'Total Amount'             => 'DECIMAL(10,2)',
+            'Customer Address'         => 'TEXT',
+            'Service Location Contact' => 'VARCHAR(255)',
+            'Service Location Phone'   => 'VARCHAR(255)',
+            'Parent Customer Name'     => 'VARCHAR(255)',
+            'Parent Customer Phone'    => 'VARCHAR(255)',
+            'Parent Customer Address'  => 'TEXT',
+        ];
+        foreach ($extraCols as $col => $type) {
+            try {
+                $pdo->exec("ALTER TABLE Staging ADD COLUMN `{$col}` {$type}");
+            } catch (Throwable $e) {
+                // Column already exists — safe to ignore
+            }
+        }
+
+        // Also ensure ABC_Invoices has all the extra columns
+        foreach ($extraCols as $col => $type) {
+            try {
+                $pdo->exec("ALTER TABLE ABC_Invoices ADD COLUMN `{$col}` {$type}");
+            } catch (Throwable $e) {
+                // Column already exists — safe to ignore
+            }
+        }
+
         $pdo->exec('TRUNCATE TABLE Staging');
 
         $stmt = $pdo->prepare('
-            INSERT INTO Staging (`Invoice`, `Due Date`, `Note`, `Action Date`, `Customer Name`, `Service Location`)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO Staging (
+                `Invoice`, `Due Date`, `Note`, `Action Date`, `Customer Name`, `Service Location`,
+                `Rows`, `Customer Email`, `PO Number`, `Phone 1`, `Phone 2`, `Total Amount`,
+                `Customer Address`, `Service Location Contact`, `Service Location Phone`,
+                `Parent Customer Name`, `Parent Customer Phone`, `Parent Customer Address`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ');
 
         foreach ($data as $row) {
@@ -91,6 +142,18 @@ try {
                 parse_date_or_null($row['Action Date'] ?? null),
                 $row['Customer Name'] ?? '',
                 $row['Service Location'] ?? '',
+                $row['Rows'] ?? null,
+                $row['Customer Email'] ?? null,
+                $row['PO Number'] ?? null,
+                $row['Phone 1'] ?? null,
+                $row['Phone 2'] ?? null,
+                parse_decimal_or_null($row['Total Amount'] ?? null),
+                $row['Customer Address'] ?? null,
+                $row['Service Location Contact'] ?? null,
+                $row['Service Location Phone'] ?? null,
+                $row['Parent Customer Name'] ?? null,
+                $row['Parent Customer Phone'] ?? null,
+                $row['Parent Customer Address'] ?? null,
             ]);
         }
 
@@ -100,9 +163,21 @@ try {
 
     if ($route === '/past-due/update' && $method === 'POST') {
         $pdo->exec('DELETE FROM ABC_Invoices WHERE Invoice NOT IN (SELECT Invoice FROM Staging)');
+        // Explicit column list so Note/Action Date saved by staff are never overwritten
+        // by a re-upload; only the source-of-truth columns from billing are synced.
         $pdo->exec('
-            INSERT INTO ABC_Invoices
-            SELECT * FROM Staging
+            INSERT INTO ABC_Invoices (
+                `Invoice`, `Due Date`, `Note`, `Action Date`, `Customer Name`, `Service Location`,
+                `Rows`, `Customer Email`, `PO Number`, `Phone 1`, `Phone 2`, `Total Amount`,
+                `Customer Address`, `Service Location Contact`, `Service Location Phone`,
+                `Parent Customer Name`, `Parent Customer Phone`, `Parent Customer Address`
+            )
+            SELECT
+                `Invoice`, `Due Date`, `Note`, `Action Date`, `Customer Name`, `Service Location`,
+                `Rows`, `Customer Email`, `PO Number`, `Phone 1`, `Phone 2`, `Total Amount`,
+                `Customer Address`, `Service Location Contact`, `Service Location Phone`,
+                `Parent Customer Name`, `Parent Customer Phone`, `Parent Customer Address`
+            FROM Staging
             WHERE Invoice NOT IN (SELECT Invoice FROM ABC_Invoices)
         ');
         write_request_log(200, 'past_due_sync_complete');

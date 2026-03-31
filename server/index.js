@@ -290,11 +290,10 @@ app.post('/api/past-due/staging', async (req, res) => {
     const data = req.body;
     const connection = await pool.getConnection();
 
-    // First, try to create the Staging table if it doesn't exist
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS Staging (
         \`Invoice\` VARCHAR(255),
-        \`Due Date\` DATE,
+        \`Due Date\` VARCHAR(255),
         \`Note\` TEXT,
         \`Action Date\` DATE,
         \`Customer Name\` VARCHAR(255),
@@ -314,22 +313,59 @@ app.post('/api/past-due/staging', async (req, res) => {
       )
     `);
 
-    // Clear existing data from staging
+    // Add any columns missing from older Staging tables
+    const extraCols = [
+      ['Rows', 'VARCHAR(255)'],
+      ['Customer Email', 'VARCHAR(255)'],
+      ['PO Number', 'VARCHAR(255)'],
+      ['Phone 1', 'VARCHAR(255)'],
+      ['Phone 2', 'VARCHAR(255)'],
+      ['Total Amount', 'DECIMAL(10,2)'],
+      ['Customer Address', 'TEXT'],
+      ['Service Location Contact', 'VARCHAR(255)'],
+      ['Service Location Phone', 'VARCHAR(255)'],
+      ['Parent Customer Name', 'VARCHAR(255)'],
+      ['Parent Customer Phone', 'VARCHAR(255)'],
+      ['Parent Customer Address', 'TEXT'],
+    ];
+    for (const [col, type] of extraCols) {
+      try {
+        await connection.execute(`ALTER TABLE Staging ADD COLUMN \`${col}\` ${type}`);
+      } catch (e) { /* column already exists */ }
+      try {
+        await connection.execute(`ALTER TABLE ABC_Invoices ADD COLUMN \`${col}\` ${type}`);
+      } catch (e) { /* column already exists */ }
+    }
+
     await connection.execute('TRUNCATE TABLE Staging');
 
-    // Insert new data into staging
     for (const row of data) {
       await connection.execute(`
         INSERT INTO Staging (
-          \`Invoice\`, \`Due Date\`, \`Note\`, \`Action Date\`, \`Customer Name\`, \`Service Location\`
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          \`Invoice\`, \`Due Date\`, \`Note\`, \`Action Date\`, \`Customer Name\`, \`Service Location\`,
+          \`Rows\`, \`Customer Email\`, \`PO Number\`, \`Phone 1\`, \`Phone 2\`, \`Total Amount\`,
+          \`Customer Address\`, \`Service Location Contact\`, \`Service Location Phone\`,
+          \`Parent Customer Name\`, \`Parent Customer Phone\`, \`Parent Customer Address\`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        row.Invoice || row['#'], 
-        row['Due Date'] ? new Date(row['Due Date']) : null,
+        row.Invoice || row['#'] || '',
+        row['Due Date'] || '',
         row.Note || '',
         row['Action Date'] ? new Date(row['Action Date']) : null,
         row['Customer Name'] || '',
-        row['Service Location'] || ''
+        row['Service Location'] || '',
+        row['Rows'] || null,
+        row['Customer Email'] || null,
+        row['PO Number'] || null,
+        row['Phone 1'] || null,
+        row['Phone 2'] || null,
+        row['Total Amount'] ? parseNumber(row['Total Amount']) : null,
+        row['Customer Address'] || null,
+        row['Service Location Contact'] || null,
+        row['Service Location Phone'] || null,
+        row['Parent Customer Name'] || null,
+        row['Parent Customer Phone'] || null,
+        row['Parent Customer Address'] || null,
       ]);
     }
 
@@ -345,16 +381,24 @@ app.post('/api/past-due/update', async (req, res) => {
   try {
     const connection = await pool.getConnection();
 
-    // Delete records not in staging
     await connection.execute(`
       DELETE FROM ABC_Invoices 
       WHERE Invoice NOT IN (SELECT Invoice FROM Staging)
     `);
 
-    // Insert new records from staging
     await connection.execute(`
-      INSERT INTO ABC_Invoices 
-      SELECT * FROM Staging 
+      INSERT INTO ABC_Invoices (
+        \`Invoice\`, \`Due Date\`, \`Note\`, \`Action Date\`, \`Customer Name\`, \`Service Location\`,
+        \`Rows\`, \`Customer Email\`, \`PO Number\`, \`Phone 1\`, \`Phone 2\`, \`Total Amount\`,
+        \`Customer Address\`, \`Service Location Contact\`, \`Service Location Phone\`,
+        \`Parent Customer Name\`, \`Parent Customer Phone\`, \`Parent Customer Address\`
+      )
+      SELECT
+        \`Invoice\`, \`Due Date\`, \`Note\`, \`Action Date\`, \`Customer Name\`, \`Service Location\`,
+        \`Rows\`, \`Customer Email\`, \`PO Number\`, \`Phone 1\`, \`Phone 2\`, \`Total Amount\`,
+        \`Customer Address\`, \`Service Location Contact\`, \`Service Location Phone\`,
+        \`Parent Customer Name\`, \`Parent Customer Phone\`, \`Parent Customer Address\`
+      FROM Staging
       WHERE Invoice NOT IN (SELECT Invoice FROM ABC_Invoices)
     `);
 
