@@ -89,22 +89,22 @@ const InvoicesManagement = () => {
             : '',
         };
 
-        setInvoices((currentInvoices) =>
-          currentInvoices.map((invoice) =>
-            String(invoice.Invoice) === String(selectedInvoice) ? updatedRecord : invoice
-          )
+        const nextInvoices = invoices.map((invoice) =>
+          String(invoice.Invoice) === String(selectedInvoice) ? updatedRecord : invoice
         );
 
-        handleInvoiceSelect(selectedInvoice, [updatedRecord, ...invoices.filter((invoice) => String(invoice.Invoice) !== String(selectedInvoice))]);
+        setInvoices(nextInvoices);
+        handleInvoiceSelect(selectedInvoice, nextInvoices);
       }
 
-      await loadInvoices();
       window.scrollTo({ top: 0, behavior: 'smooth' });
       alert(
         response?.record
           ? `Invoice updated successfully.\nSaved note: ${response.record.Note || ''}\nSaved action date: ${response.record['Action Date'] || ''}`
           : 'Invoice updated successfully!'
       );
+
+      loadInvoices();
     } catch (error) {
       alert('Failed to update invoice: ' + error.message);
     }
