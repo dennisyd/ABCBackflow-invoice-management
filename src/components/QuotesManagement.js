@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { fetchQuotes, updateQuote } from '../services/api';
+import { apiFetch } from '../services/apiBase';
 
 const QuotesManagement = () => {
   const [selectedQuote, setSelectedQuote] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [note, setNote] = useState('');
   const [actionDate, setActionDate] = useState('');
+  const [quoteQuery, setQuoteQuery] = useState('');
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,19 +23,29 @@ const QuotesManagement = () => {
       // Format Total Amount with $ sign
       data = data.map(quote => ({
         ...quote,
-        'Total Amount': quote['Total Amount'] 
+        'Total Amount': quote['Total Amount']
           ? `$${parseFloat(quote['Total Amount'].replace(/[^0-9.-]+/g, '')).toFixed(2)}`
           : '$0.00',
       }));
 
-      // Sort quotes by Quote number in descending order
-      data.sort((a, b) => String(b.Quote).localeCompare(String(a.Quote)));
+      // Sort quotes by Action Date in descending order
+      data.sort((a, b) => {
+        const dateA = new Date(a['Action Date']);
+        const dateB = new Date(b['Action Date']);
+
+        // If Action Date is invalid, push it to the bottom
+        if (isNaN(dateA)) return 1;
+        if (isNaN(dateB)) return -1;
+
+        // Sort in descending order (newest first)
+        return dateB - dateA;
+      });
 
       setQuotes(data);
 
       // Restore the selected quote from localStorage, if available
       const lastSelectedQuote = localStorage.getItem('selectedQuote');
-      const validLastQuote = data.find((q) => q.Quote == lastSelectedQuote);
+      const validLastQuote = data.find((q) => q.Quote === lastSelectedQuote);
 
       if (validLastQuote) {
         handleQuoteSelect(lastSelectedQuote, data);
@@ -52,6 +64,7 @@ const QuotesManagement = () => {
     const selected = quoteList.find((q) => String(q.Quote) === String(quoteId));
     if (selected) {
       setSelectedQuote(quoteId);
+      setQuoteQuery(String(quoteId));
       setSelectedCustomer(selected.Name || '');
       setNote(selected.Note || '');
 
@@ -75,6 +88,22 @@ const QuotesManagement = () => {
     }
   };
 
+  const handleQuoteInputChange = (e) => {
+    const value = e.target.value;
+    setQuoteQuery(value);
+
+    // If the typed value exactly matches a quote number, auto-select it
+    const exactMatch = quotes.find((q) => String(q.Quote) === value);
+    if (exactMatch) {
+      handleQuoteSelect(exactMatch.Quote, quotes);
+    }
+  };
+
+  const filteredQuotes = quotes.filter((quote) => {
+    if (!quoteQuery.trim()) return true;
+    return String(quote.Quote).startsWith(quoteQuery.trim());
+  });
+
   const handleUpdate = async () => {
     try {
       await updateQuote(selectedQuote, note, actionDate);
@@ -88,7 +117,7 @@ const QuotesManagement = () => {
 
   const handleDownload = async () => {
     try {
-      const response = await fetch('/api/quotes/download');
+      const response = await apiFetch('/quotes/download');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -115,17 +144,19 @@ const QuotesManagement = () => {
         <div className="flex flex-col md:flex-row md:items-center mb-6 gap-4">
           <div className="flex-1">
             <label className="block text-sm font-medium mb-2 text-gray-700">Choose a Quote</label>
-            <select
-              value={selectedQuote}
-              onChange={(e) => handleQuoteSelect(e.target.value)}
+            <input
+              type="text"
+              value={quoteQuery}
+              onChange={handleQuoteInputChange}
+              placeholder="Type or paste quote number"
               className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
-            >
-              {quotes.map((quote) => (
-                <option key={quote.Quote} value={quote.Quote}>
-                  {quote.Quote}
-                </option>
+              list="quote-options"
+            />
+            <datalist id="quote-options">
+              {filteredQuotes.map((quote) => (
+                <option key={quote.Quote} value={quote.Quote} />
               ))}
-            </select>
+            </datalist>
           </div>
         </div>
 

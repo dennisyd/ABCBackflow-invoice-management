@@ -1,0 +1,41 @@
+>       UPDATE UpcomingTests ut
+        JOIN UpcomingTests_Staging uts ON ut.Serial = uts.Serial
+        SET
+          ut.\`Parent Customer\` = uts.\`Parent Customer\`,
+          ut.\`Customer\` = uts.\`Customer\`,
+          ut.\`Customer Phone\` = uts.\`Customer Phone\`,
+          ut.\`Customer Email\` = uts.\`Customer Email\`,
+          ut.\`Customer Address Line 1\` = uts.\`Customer Address Line 1\`,
+          ut.\`Customer Address Line 2\` = uts.\`Customer Address Line 2\`,
+          ut.\`Customer City\` = uts.\`Customer City\`,
+          ut.\`Customer State\` = uts.\`Customer State\`,
+          ut.\`Customer Zip\` = uts.\`Customer Zip\`,
+          ut.\`Syncta Id\` = uts.\`Syncta Id\`,
+          ut.\`Containment\` = uts.\`Containment\`,
+          ut.\`Last Tested On\` = uts.\`Last Tested On\`,
+          ut.\`Next Test Due\` = uts.\`Next Test Due\`,
+          ut.\`Assembly Status\` = uts.\`Assembly Status\`,
+          ut.\`Assembly Type\` = uts.\`Assembly Type\`,
+          ut.\`Assembly Manufacturer\` = uts.\`Assembly Manufacturer\`,
+          ut.\`Assembly Model\` = uts.\`Assembly Model\`,
+          ut.\`Assembly Size\` = uts.\`Assembly Size\`,
+          ut.\`Assembly Location\` = uts.\`Assembly Location\`,
+          ut.\`Install Date\` = uts.\`Install Date\`,
+          ut.\`Testing Frequency\` = uts.\`Testing Frequency\`,
+          ut.\`Notification Frequency\` = uts.\`Notification Frequency\`,
+          ut.\`Last Notified At\` = uts.\`Last Notified At\`,
+          ut.\`Notification Month\` = uts.\`Notification Month\`,
+          ut.\`Price\` = uts.\`Price\`,
+          ut.\`Test Yearly\` = uts.\`Test Yearly\`,
+          ut.\`Water Purveyor\` = uts.\`Water Purveyor\`,
+          ut.\`Service Location Name\` = uts.\`Service Location Name\`,
+          ut.\`Service Location Phone\` = uts.\`Service Location Phone\`,
+          ut.\`Service Location Email\` = uts.\`Service Location Email\`,
+          ut.\`Service Location Address Line 1\` = uts.\`Service Location Address Line 1\`,
+          ut.\`Service Location Address Line 2\` = uts.\`Service Location Address Line 2\`,
+          ut.\`Service Location City\` = uts.\`Service Location City\`,
+          ut.\`Service Location State\` = uts.\`Service Location State\`,
+          ut.\`Service Location Zip\` = uts.\`Service Location Zip\`
+      `);
+  
+      // Insert new records

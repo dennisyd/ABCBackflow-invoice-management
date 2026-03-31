@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
+import { apiFetch } from '../services/apiBase';
 
 const PastDueInvoices = () => {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -66,7 +67,7 @@ const PastDueInvoices = () => {
     setIsUpdating(true);
     try {
       // First, send the data to create/update staging table
-      const stagingResponse = await fetch('http://localhost:5000/api/past-due/staging', {
+      const stagingResponse = await apiFetch('/past-due/staging', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -79,7 +80,7 @@ const PastDueInvoices = () => {
       }
 
       // Then trigger the database update
-      const updateResponse = await fetch('http://localhost:5000/api/past-due/update', {
+      const updateResponse = await apiFetch('/past-due/update', {
         method: 'POST',
       });
 

@@ -8,8 +8,61 @@ const fs = require('fs');
 const xlsx = require('xlsx');
 
 const app = express();
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '25mb';
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+
+const parseDate = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return isNaN(d) ? null : d;
+};
+
+const parseNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const num = parseFloat(String(value).replace(/[^0-9.-]/g, ''));
+  return isNaN(num) ? null : num;
+};
+
+const ensureUpcomingTestsPrimaryKey = async (connection) => {
+  await connection.execute(`
+    UPDATE UpcomingTests
+    SET \`Customer Address Line 1\` = ''
+    WHERE \`Customer Address Line 1\` IS NULL
+  `);
+  await connection.execute(`
+    UPDATE UpcomingTests
+    SET \`Assembly Location\` = ''
+    WHERE \`Assembly Location\` IS NULL
+  `);
+
+  const [pkRows] = await connection.query(`
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'UpcomingTests'
+      AND CONSTRAINT_NAME = 'PRIMARY'
+    ORDER BY ORDINAL_POSITION
+  `);
+
+  const currentPk = pkRows.map((row) => row.COLUMN_NAME);
+  const desiredPk = ['Customer Address Line 1', 'Serial', 'Assembly Location'];
+  const matchesDesiredPk =
+    currentPk.length === desiredPk.length &&
+    currentPk.every((column, index) => column === desiredPk[index]);
+
+  if (!matchesDesiredPk) {
+    if (currentPk.length > 0) {
+      await connection.execute('ALTER TABLE UpcomingTests DROP PRIMARY KEY');
+    }
+    await connection.execute(`
+      ALTER TABLE UpcomingTests
+      ADD PRIMARY KEY (\`Customer Address Line 1\`, \`Serial\`, \`Assembly Location\`)
+    `);
+  }
+};
 
 // Debug: Log essential environment variables
 console.log('Environment variables loaded:', {
@@ -465,9 +518,444 @@ app.post('/api/quotes/update-from-staging', async (req, res) => {
   }
 });
 
+// Upcoming Tests endpoints
+app.get('/api/upcoming-tests', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS UpcomingTests (
+        \`Parent Customer\` VARCHAR(255),
+        \`Customer\` VARCHAR(255),
+        \`Note\` TEXT,
+        \`Action Date\` DATE,
+        \`Customer Phone\` VARCHAR(255),
+        \`Customer Email\` VARCHAR(255),
+        \`Customer Address Line 1\` VARCHAR(255),
+        \`Customer Address Line 2\` VARCHAR(255),
+        \`Customer City\` VARCHAR(255),
+        \`Customer State\` VARCHAR(255),
+        \`Customer Zip\` VARCHAR(50),
+        \`Serial\` VARCHAR(255),
+        \`Syncta Id\` VARCHAR(255),
+        \`Containment\` VARCHAR(255),
+        \`Last Tested On\` DATE,
+        \`Next Test Due\` DATE,
+        \`Assembly Status\` VARCHAR(255),
+        \`Assembly Type\` VARCHAR(255),
+        \`Assembly Manufacturer\` VARCHAR(255),
+        \`Assembly Model\` VARCHAR(255),
+        \`Assembly Size\` VARCHAR(255),
+        \`Assembly Location\` VARCHAR(255),
+        \`Install Date\` DATE,
+        \`Testing Frequency\` VARCHAR(255),
+        \`Notification Frequency\` VARCHAR(255),
+        \`Last Notified At\` DATE,
+        \`Notification Month\` VARCHAR(255),
+        \`Price\` DECIMAL(10,2),
+        \`Test Yearly\` VARCHAR(255),
+        \`Water Purveyor\` VARCHAR(255),
+        \`Service Location Name\` VARCHAR(255),
+        \`Service Location Phone\` VARCHAR(255),
+        \`Service Location Email\` VARCHAR(255),
+        \`Service Location Address Line 1\` VARCHAR(255),
+        \`Service Location Address Line 2\` VARCHAR(255),
+        \`Service Location City\` VARCHAR(255),
+        \`Service Location State\` VARCHAR(255),
+        \`Service Location Zip\` VARCHAR(50)
+      )
+    `);
+    try {
+      await connection.execute('ALTER TABLE UpcomingTests ADD COLUMN `Action Date` DATE AFTER `Note`');
+    } catch (alterErr) {
+      const code = alterErr?.code;
+      if (code !== 'ER_DUP_FIELDNAME') {
+        throw alterErr;
+      }
+    }
+    await ensureUpcomingTestsPrimaryKey(connection);
+    try {
+      await connection.execute('ALTER TABLE UpcomingTests ADD COLUMN `Action Date` DATE AFTER `Note`');
+    } catch (alterErr) {
+      const code = alterErr?.code;
+      if (code !== 'ER_DUP_FIELDNAME') {
+        throw alterErr;
+      }
+    }
+
+    const [rows] = await connection.execute(
+      'SELECT * FROM UpcomingTests ORDER BY `Next Test Due` ASC, `Last Tested On` DESC'
+    );
+
+    const formattedRows = rows.map(row => ({
+      ...row,
+      'Action Date': row['Action Date'] ? new Date(row['Action Date']).toLocaleDateString('en-US') : '',
+      'Last Tested On': row['Last Tested On'] ? new Date(row['Last Tested On']).toLocaleDateString('en-US') : '',
+      'Next Test Due': row['Next Test Due'] ? new Date(row['Next Test Due']).toLocaleDateString('en-US') : '',
+      'Install Date': row['Install Date'] ? new Date(row['Install Date']).toLocaleDateString('en-US') : '',
+      'Last Notified At': row['Last Notified At'] ? new Date(row['Last Notified At']).toLocaleDateString('en-US') : '',
+    }));
+
+    res.json(formattedRows);
+  } catch (error) {
+    console.error('Error fetching upcoming tests:', error);
+    res.status(500).json({ error: 'Error fetching upcoming tests', details: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// Update a single Upcoming Test's Note and Action Date by composite key
+app.post('/api/upcoming-tests/update-row', async (req, res) => {
+  const { serial, customerAddressLine1, assemblyLocation, note, actionDate } = req.body || {};
+  if (!serial || customerAddressLine1 === undefined || customerAddressLine1 === null || assemblyLocation === undefined || assemblyLocation === null) {
+    return res.status(400).json({ error: 'Serial, Customer Address Line 1, and Assembly Location are required' });
+  }
+
+  try {
+    const connection = await pool.getConnection();
+    await connection.execute(
+      'UPDATE `UpcomingTests` SET `Note` = ?, `Action Date` = ? WHERE `Serial` = ? AND `Customer Address Line 1` = ? AND `Assembly Location` = ?',
+      [note || '', actionDate ? new Date(actionDate) : null, serial, customerAddressLine1, assemblyLocation]
+    );
+    connection.release();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating upcoming test row:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      sqlMessage: error.sqlMessage,
+    });
+    res.status(500).json({ error: 'Failed to update upcoming test row', details: error.message });
+  }
+});
+
+app.post('/api/upcoming-tests/staging', async (req, res) => {
+  try {
+    const data = req.body;
+    console.log(`[upcoming-tests/staging] received ${data?.length || 0} rows`);
+    const connection = await pool.getConnection();
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS UpcomingTests_Staging (
+        \`Parent Customer\` VARCHAR(255),
+        \`Customer\` VARCHAR(255),
+        \`Customer Phone\` VARCHAR(255),
+        \`Customer Email\` VARCHAR(255),
+        \`Customer Address Line 1\` VARCHAR(255),
+        \`Customer Address Line 2\` VARCHAR(255),
+        \`Customer City\` VARCHAR(255),
+        \`Customer State\` VARCHAR(255),
+        \`Customer Zip\` VARCHAR(50),
+        \`Serial\` VARCHAR(255),
+        \`Syncta Id\` VARCHAR(255),
+        \`Containment\` VARCHAR(255),
+        \`Last Tested On\` DATE,
+        \`Next Test Due\` DATE,
+        \`Assembly Status\` VARCHAR(255),
+        \`Assembly Type\` VARCHAR(255),
+        \`Assembly Manufacturer\` VARCHAR(255),
+        \`Assembly Model\` VARCHAR(255),
+        \`Assembly Size\` VARCHAR(255),
+        \`Assembly Location\` VARCHAR(255),
+        \`Install Date\` DATE,
+        \`Testing Frequency\` VARCHAR(255),
+        \`Notification Frequency\` VARCHAR(255),
+        \`Last Notified At\` DATE,
+        \`Notification Month\` VARCHAR(255),
+        \`Price\` DECIMAL(10,2),
+        \`Test Yearly\` VARCHAR(255),
+        \`Water Purveyor\` VARCHAR(255),
+        \`Service Location Name\` VARCHAR(255),
+        \`Service Location Phone\` VARCHAR(255),
+        \`Service Location Email\` VARCHAR(255),
+        \`Service Location Address Line 1\` VARCHAR(255),
+        \`Service Location Address Line 2\` VARCHAR(255),
+        \`Service Location City\` VARCHAR(255),
+        \`Service Location State\` VARCHAR(255),
+        \`Service Location Zip\` VARCHAR(50)
+      )
+    `);
+
+    // Ensure staging schema does not carry a Note column (Notes are only tracked in the main table)
+    try {
+      await connection.execute('ALTER TABLE UpcomingTests_Staging DROP COLUMN `Note`');
+    } catch (dropErr) {
+      // Older MySQL versions may error if the column doesn't exist; ignore those cases
+      const code = dropErr?.code;
+      if (code !== 'ER_CANT_DROP_FIELD_OR_KEY' && code !== 'ER_BAD_FIELD_ERROR') {
+        throw dropErr;
+      }
+    }
+
+    await connection.execute('TRUNCATE TABLE UpcomingTests_Staging');
+
+    for (const row of data) {
+      const serial = (row['Serial'] || '').toString().trim();
+      // Skip rows without a Serial to avoid PK conflicts during sync
+      if (!serial) {
+        continue;
+      }
+
+      await connection.execute(
+        `INSERT INTO UpcomingTests_Staging (
+          \`Parent Customer\`, \`Customer\`, \`Customer Phone\`, \`Customer Email\`,
+          \`Customer Address Line 1\`, \`Customer Address Line 2\`, \`Customer City\`, \`Customer State\`,
+          \`Customer Zip\`, \`Serial\`, \`Syncta Id\`, \`Containment\`, \`Last Tested On\`, \`Next Test Due\`,
+          \`Assembly Status\`, \`Assembly Type\`, \`Assembly Manufacturer\`, \`Assembly Model\`, \`Assembly Size\`,
+          \`Assembly Location\`, \`Install Date\`, \`Testing Frequency\`, \`Notification Frequency\`,
+          \`Last Notified At\`, \`Notification Month\`, \`Price\`, \`Test Yearly\`, \`Water Purveyor\`,
+          \`Service Location Name\`, \`Service Location Phone\`, \`Service Location Email\`,
+          \`Service Location Address Line 1\`, \`Service Location Address Line 2\`,
+          \`Service Location City\`, \`Service Location State\`, \`Service Location Zip\`
+        ) VALUES (${Array(36).fill('?').join(', ')})`,
+        [
+          row['Parent Customer'] || '',
+          row['Customer'] || '',
+          row['Customer Phone'] || '',
+          row['Customer Email'] || '',
+          row['Customer Address Line 1'] || '',
+          row['Customer Address Line 2'] || '',
+          row['Customer City'] || '',
+          row['Customer State'] || '',
+          row['Customer Zip'] || '',
+          serial,
+          row['Syncta Id'] || '',
+          row['Containment'] || '',
+          parseDate(row['Last Tested On']),
+          parseDate(row['Next Test Due']),
+          row['Assembly Status'] || '',
+          row['Assembly Type'] || '',
+          row['Assembly Manufacturer'] || '',
+          row['Assembly Model'] || '',
+          row['Assembly Size'] || '',
+          row['Assembly Location'] || '',
+          parseDate(row['Install Date']),
+          row['Testing Frequency'] || '',
+          row['Notification Frequency'] || '',
+          parseDate(row['Last Notified At']),
+          row['Notification Month'] || '',
+          parseNumber(row['Price']),
+          row['Test Yearly'] || '',
+          row['Water Purveyor'] || '',
+          row['Service Location Name'] || '',
+          row['Service Location Phone'] || '',
+          row['Service Location Email'] || '',
+          row['Service Location Address Line 1'] || '',
+          row['Service Location Address Line 2'] || '',
+          row['Service Location City'] || '',
+          row['Service Location State'] || '',
+          row['Service Location Zip'] || '',
+        ]
+      );
+    }
+
+    console.log('[upcoming-tests/staging] staging load complete');
+    connection.release();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating upcoming tests staging:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      sqlMessage: error.sqlMessage,
+      sqlState: error.sqlState,
+      sql: error.sql,
+    });
+    res.status(500).json({
+      error: 'Failed to update upcoming tests staging',
+      details: error.message,
+      code: error.code,
+      sqlMessage: error.sqlMessage,
+      sqlState: error.sqlState,
+      sql: error.sql,
+    });
+  }
+});
+
+app.post('/api/upcoming-tests/update', async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS UpcomingTests (
+        \`Parent Customer\` VARCHAR(255),
+        \`Customer\` VARCHAR(255),
+        \`Note\` TEXT,
+        \`Action Date\` DATE,
+        \`Customer Phone\` VARCHAR(255),
+        \`Customer Email\` VARCHAR(255),
+        \`Customer Address Line 1\` VARCHAR(255),
+        \`Customer Address Line 2\` VARCHAR(255),
+        \`Customer City\` VARCHAR(255),
+        \`Customer State\` VARCHAR(255),
+        \`Customer Zip\` VARCHAR(50),
+        \`Serial\` VARCHAR(255),
+        \`Syncta Id\` VARCHAR(255),
+        \`Containment\` VARCHAR(255),
+        \`Last Tested On\` DATE,
+        \`Next Test Due\` DATE,
+        \`Assembly Status\` VARCHAR(255),
+        \`Assembly Type\` VARCHAR(255),
+        \`Assembly Manufacturer\` VARCHAR(255),
+        \`Assembly Model\` VARCHAR(255),
+        \`Assembly Size\` VARCHAR(255),
+        \`Assembly Location\` VARCHAR(255),
+        \`Install Date\` DATE,
+        \`Testing Frequency\` VARCHAR(255),
+        \`Notification Frequency\` VARCHAR(255),
+        \`Last Notified At\` DATE,
+        \`Notification Month\` VARCHAR(255),
+        \`Price\` DECIMAL(10,2),
+        \`Test Yearly\` VARCHAR(255),
+        \`Water Purveyor\` VARCHAR(255),
+        \`Service Location Name\` VARCHAR(255),
+        \`Service Location Phone\` VARCHAR(255),
+        \`Service Location Email\` VARCHAR(255),
+        \`Service Location Address Line 1\` VARCHAR(255),
+        \`Service Location Address Line 2\` VARCHAR(255),
+        \`Service Location City\` VARCHAR(255),
+        \`Service Location State\` VARCHAR(255),
+        \`Service Location Zip\` VARCHAR(50)
+      )
+    `);
+    await ensureUpcomingTestsPrimaryKey(connection);
+
+    // Delete records not in staging
+    const [deleteResult] = await connection.execute(`
+      DELETE FROM UpcomingTests 
+      WHERE (\`Customer Address Line 1\`, Serial, \`Assembly Location\`) NOT IN (
+        SELECT \`Customer Address Line 1\`, Serial, \`Assembly Location\`
+        FROM UpcomingTests_Staging
+      )
+    `);
+
+    // Update existing records from staging
+    const [updateResult] = await connection.execute(`
+      UPDATE UpcomingTests ut
+      JOIN UpcomingTests_Staging uts
+        ON ut.Serial = uts.Serial
+       AND ut.\`Customer Address Line 1\` = uts.\`Customer Address Line 1\`
+       AND ut.\`Assembly Location\` = uts.\`Assembly Location\`
+      SET
+        ut.\`Parent Customer\` = uts.\`Parent Customer\`,
+        ut.\`Customer\` = uts.\`Customer\`,
+        ut.\`Customer Phone\` = uts.\`Customer Phone\`,
+        ut.\`Customer Email\` = uts.\`Customer Email\`,
+        ut.\`Customer Address Line 1\` = uts.\`Customer Address Line 1\`,
+        ut.\`Customer Address Line 2\` = uts.\`Customer Address Line 2\`,
+        ut.\`Customer City\` = uts.\`Customer City\`,
+        ut.\`Customer State\` = uts.\`Customer State\`,
+        ut.\`Customer Zip\` = uts.\`Customer Zip\`,
+        ut.\`Syncta Id\` = uts.\`Syncta Id\`,
+        ut.\`Containment\` = uts.\`Containment\`,
+        ut.\`Last Tested On\` = uts.\`Last Tested On\`,
+        ut.\`Next Test Due\` = uts.\`Next Test Due\`,
+        ut.\`Assembly Status\` = uts.\`Assembly Status\`,
+        ut.\`Assembly Type\` = uts.\`Assembly Type\`,
+        ut.\`Assembly Manufacturer\` = uts.\`Assembly Manufacturer\`,
+        ut.\`Assembly Model\` = uts.\`Assembly Model\`,
+        ut.\`Assembly Size\` = uts.\`Assembly Size\`,
+        ut.\`Assembly Location\` = uts.\`Assembly Location\`,
+        ut.\`Install Date\` = uts.\`Install Date\`,
+        ut.\`Testing Frequency\` = uts.\`Testing Frequency\`,
+        ut.\`Notification Frequency\` = uts.\`Notification Frequency\`,
+        ut.\`Last Notified At\` = uts.\`Last Notified At\`,
+        ut.\`Notification Month\` = uts.\`Notification Month\`,
+        ut.\`Price\` = uts.\`Price\`,
+        ut.\`Test Yearly\` = uts.\`Test Yearly\`,
+        ut.\`Water Purveyor\` = uts.\`Water Purveyor\`,
+        ut.\`Service Location Name\` = uts.\`Service Location Name\`,
+        ut.\`Service Location Phone\` = uts.\`Service Location Phone\`,
+        ut.\`Service Location Email\` = uts.\`Service Location Email\`,
+        ut.\`Service Location Address Line 1\` = uts.\`Service Location Address Line 1\`,
+        ut.\`Service Location Address Line 2\` = uts.\`Service Location Address Line 2\`,
+        ut.\`Service Location City\` = uts.\`Service Location City\`,
+        ut.\`Service Location State\` = uts.\`Service Location State\`,
+        ut.\`Service Location Zip\` = uts.\`Service Location Zip\`
+    `);
+
+    // Insert new records
+    const [insertResult] = await connection.execute(`
+      INSERT INTO UpcomingTests (
+        \`Parent Customer\`, \`Customer\`, \`Note\`, \`Action Date\`, \`Customer Phone\`, \`Customer Email\`,
+        \`Customer Address Line 1\`, \`Customer Address Line 2\`, \`Customer City\`, \`Customer State\`,
+        \`Customer Zip\`, \`Serial\`, \`Syncta Id\`, \`Containment\`, \`Last Tested On\`, \`Next Test Due\`,
+        \`Assembly Status\`, \`Assembly Type\`, \`Assembly Manufacturer\`, \`Assembly Model\`, \`Assembly Size\`,
+        \`Assembly Location\`, \`Install Date\`, \`Testing Frequency\`, \`Notification Frequency\`,
+        \`Last Notified At\`, \`Notification Month\`, \`Price\`, \`Test Yearly\`, \`Water Purveyor\`,
+        \`Service Location Name\`, \`Service Location Phone\`, \`Service Location Email\`,
+        \`Service Location Address Line 1\`, \`Service Location Address Line 2\`,
+        \`Service Location City\`, \`Service Location State\`, \`Service Location Zip\`
+      )
+      SELECT 
+        uts.\`Parent Customer\`, uts.\`Customer\`, '' AS \`Note\`, NULL AS \`Action Date\`, uts.\`Customer Phone\`, uts.\`Customer Email\`,
+        uts.\`Customer Address Line 1\`, uts.\`Customer Address Line 2\`, uts.\`Customer City\`, uts.\`Customer State\`,
+        uts.\`Customer Zip\`, uts.\`Serial\`, uts.\`Syncta Id\`, uts.\`Containment\`, uts.\`Last Tested On\`, uts.\`Next Test Due\`,
+        uts.\`Assembly Status\`, uts.\`Assembly Type\`, uts.\`Assembly Manufacturer\`, uts.\`Assembly Model\`, uts.\`Assembly Size\`,
+        uts.\`Assembly Location\`, uts.\`Install Date\`, uts.\`Testing Frequency\`, uts.\`Notification Frequency\`,
+        uts.\`Last Notified At\`, uts.\`Notification Month\`, uts.\`Price\`, uts.\`Test Yearly\`, uts.\`Water Purveyor\`,
+        uts.\`Service Location Name\`, uts.\`Service Location Phone\`, uts.\`Service Location Email\`,
+        uts.\`Service Location Address Line 1\`, uts.\`Service Location Address Line 2\`,
+        uts.\`Service Location City\`, uts.\`Service Location State\`, uts.\`Service Location Zip\`
+      FROM UpcomingTests_Staging uts
+      LEFT JOIN UpcomingTests ut
+        ON uts.Serial = ut.Serial
+       AND uts.\`Customer Address Line 1\` = ut.\`Customer Address Line 1\`
+       AND uts.\`Assembly Location\` = ut.\`Assembly Location\`
+      WHERE ut.Serial IS NULL
+    `);
+
+    console.log('[upcoming-tests/update] staging -> prod sync', {
+      deleted: deleteResult?.affectedRows,
+      updated: updateResult?.affectedRows,
+      inserted: insertResult?.affectedRows,
+    });
+
+    connection.release();
+    res.json({
+      success: true,
+      deleted: deleteResult?.affectedRows,
+      updated: updateResult?.affectedRows,
+      inserted: insertResult?.affectedRows,
+    });
+  } catch (error) {
+    console.error('Error updating upcoming tests:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      sqlMessage: error.sqlMessage,
+    });
+    res.status(500).json({
+      error: 'Failed to update upcoming tests',
+      details: error.message,
+      code: error.code,
+      sql: error.sqlMessage,
+    });
+  }
+});
+
 // Test Route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend is running!' });
+});
+
+app.use((error, req, res, next) => {
+  if (error?.type === 'entity.too.large') {
+    console.error('Request payload exceeded configured limit:', {
+      limit: JSON_BODY_LIMIT,
+      path: req.originalUrl,
+      method: req.method,
+    });
+    return res.status(413).json({
+      error: 'Payload too large',
+      details: `Request body exceeds the configured limit of ${JSON_BODY_LIMIT}.`,
+    });
+  }
+
+  return next(error);
 });
 
 // Start the server

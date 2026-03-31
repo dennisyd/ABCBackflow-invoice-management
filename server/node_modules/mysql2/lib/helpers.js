@@ -28,10 +28,9 @@ try {
   // the purpose of this is to prevent projects using Webpack from displaying a warning during runtime if cardinal is not a dependency
   const REQUIRE_TERMINATOR = '';
   highlightFn = require(`cardinal${REQUIRE_TERMINATOR}`).highlight;
-} catch (err) {
+} catch {
   highlightFn = (text) => {
     if (!cardinalRecommended) {
-      // eslint-disable-next-line no-console
       console.log('For nicer debug output consider install cardinal@^2.0.0');
       cardinalRecommended = true;
     }
@@ -43,9 +42,7 @@ try {
  * Prints debug message with code frame, will try to use `cardinal` if available.
  */
 function printDebugWithCode(msg, code) {
-  // eslint-disable-next-line no-console
   console.log(`\n\n${msg}:\n`);
-  // eslint-disable-next-line no-console
   console.log(`${highlightFn(code)}\n`);
 }
 
@@ -74,14 +71,13 @@ const privateObjectProps = new Set([
 
 exports.privateObjectProps = privateObjectProps;
 
-const fieldEscape = (field) => {
+const fieldEscape = (field, isEval = true) => {
   if (privateObjectProps.has(field)) {
     throw new Error(
-      `The field name (${field}) can't be the same as an object's private property.`,
+      `The field name (${field}) can't be the same as an object's private property.`
     );
   }
 
-  return srcEscape(field);
+  return isEval ? srcEscape(field) : field;
 };
-
 exports.fieldEscape = fieldEscape;

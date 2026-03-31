@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { fetchInvoices, updateInvoice } from '../services/api';
+import { apiFetch } from '../services/apiBase';
 
 const InvoicesManagement = () => {
   const [selectedInvoice, setSelectedInvoice] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [note, setNote] = useState('');
   const [actionDate, setActionDate] = useState('');
+  const [invoiceQuery, setInvoiceQuery] = useState('');
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,36 +19,45 @@ const InvoicesManagement = () => {
   const loadInvoices = async () => {
     try {
       let data = await fetchInvoices();
-  
-      // Sort invoices by Due Date in descending order
-      data.sort((a, b) => new Date(b['Due Date']) - new Date(a['Due Date']));
-  
+
+      // Sort invoices by Action Date in descending order
+      data.sort((a, b) => {
+        const dateA = new Date(a['Action Date']);
+        const dateB = new Date(b['Action Date']);
+
+        // Check if both dates are valid
+        if (isNaN(dateA)) return 1; // If dateA is invalid, push it to the bottom
+        if (isNaN(dateB)) return -1; // If dateB is invalid, push it to the bottom
+
+        // Sort in descending order
+        return dateB - dateA;
+      });
+
       setInvoices(data);
-  
+
       // Restore the selected invoice from localStorage, if available
       const lastSelectedInvoice = localStorage.getItem('selectedInvoice');
-      const validLastInvoice = data.find((inv) => inv.Invoice == lastSelectedInvoice);
-  
+      const validLastInvoice = data.find((inv) => inv.Invoice === lastSelectedInvoice);
+
       if (validLastInvoice) {
         handleInvoiceSelect(lastSelectedInvoice, data);
       } else if (data.length > 0) {
-        // If no valid saved invoice, default to the first (now sorted by date)
+        // If no valid saved invoice, default to the first (now sorted by Action Date)
         handleInvoiceSelect(data[0].Invoice, data);
       }
-  
+
       setLoading(false);
     } catch (err) {
       setError('Failed to load invoices');
       setLoading(false);
     }
   };
-  
-  
 
   const handleInvoiceSelect = (invoiceId, invoiceList = invoices) => {
     const selected = invoiceList.find((inv) => String(inv.Invoice) === String(invoiceId));
     if (selected) {
       setSelectedInvoice(invoiceId);
+      setInvoiceQuery(String(invoiceId));
       setSelectedCustomer(selected['Customer Name'] || '');
       setNote(selected.Note || '');
       setActionDate(
@@ -76,7 +87,7 @@ const InvoicesManagement = () => {
 
   const handleDownload = async () => {
     try {
-      const response = await fetch('/api/invoices/download');
+      const response = await apiFetch('/invoices/download');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -91,6 +102,22 @@ const InvoicesManagement = () => {
     }
   };
 
+  const handleInvoiceInputChange = (e) => {
+    const value = e.target.value;
+    setInvoiceQuery(value);
+
+    // If the typed value exactly matches an invoice number, auto-select it
+    const exactMatch = invoices.find((inv) => String(inv.Invoice) === value);
+    if (exactMatch) {
+      handleInvoiceSelect(exactMatch.Invoice, invoices);
+    }
+  };
+
+  const filteredInvoices = invoices.filter((invoice) => {
+    if (!invoiceQuery.trim()) return true;
+    return String(invoice.Invoice).startsWith(invoiceQuery.trim());
+  });
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
 
@@ -103,17 +130,19 @@ const InvoicesManagement = () => {
         <div className="flex flex-col md:flex-row md:items-center mb-6 gap-4">
           <div className="flex-1">
             <label className="block text-sm font-medium mb-2 text-gray-700">Choose an Invoice</label>
-            <select
-              value={selectedInvoice}
-              onChange={(e) => handleInvoiceSelect(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
-            >
-              {invoices.map((invoice) => (
-                <option key={invoice.Invoice} value={invoice.Invoice}>
-                  {invoice.Invoice}
-                </option>
+            <input
+              type="text"
+              value={invoiceQuery}
+              onChange={handleInvoiceInputChange}
+              placeholder="Type or paste invoice number"
+              className="w-full p-2 border border-gray-300 rounded-md bg-gray-100 mb-2"
+              list="invoice-options"
+            />
+            <datalist id="invoice-options">
+              {filteredInvoices.map((invoice) => (
+                <option key={invoice.Invoice} value={invoice.Invoice} />
               ))}
-            </select>
+            </datalist>
           </div>
         </div>
 
@@ -183,7 +212,12 @@ const InvoicesManagement = () => {
               <tr className="bg-gray-200 text-left text-sm font-semibold text-gray-700">
                 <th className="border p-3">Invoice</th>
                 <th className="border p-3">Due Date</th>
-                <th className="border p-3">Note</th>
+                <th
+                  className="border p-3"
+                  style={{ minWidth: '500px', width: '500px' }}
+                >
+                  Note
+                </th>
                 <th className="border p-3">Action Date</th>
                 <th className="border p-3">Customer Name</th>
                 <th className="border p-3">Service Location</th>
@@ -210,7 +244,12 @@ const InvoicesManagement = () => {
                 >
                   <td className="border p-3">{invoice.Invoice}</td>
                   <td className="border p-3">{invoice['Due Date']}</td>
-                  <td className="border p-3">{invoice.Note}</td>
+                  <td
+                    className="border p-3 whitespace-pre-line"
+                    style={{ minWidth: '500px', width: '500px' }}
+                  >
+                    {invoice.Note}
+                  </td>
                   <td className="border p-3">{invoice['Action Date']}</td>
                   <td className="border p-3">{invoice['Customer Name']}</td>
                   <td className="border p-3">{invoice['Service Location']}</td>

@@ -5,6 +5,8 @@ import InvoicesManagement from './components/InvoicesManagement';
 import PastDueInvoices from './components/PastDueInvoices';
 import QuotesManagement from './components/QuotesManagement';
 import QuotesUpdate from './components/QuotesUpdate';
+import UpcomingTests from './components/UpcomingTests';
+import UpcomingTestsUpdate from './components/UpcomingTestsUpdate';
 
 function App() {
   return (
@@ -17,6 +19,8 @@ function App() {
             <Route path="/past-due" element={<PastDueInvoices />} />
             <Route path="/quotes" element={<QuotesManagement />} />
             <Route path="/quotes-update" element={<QuotesUpdate />} />
+            <Route path="/upcoming-tests" element={<UpcomingTests />} />
+            <Route path="/upcoming-tests-update" element={<UpcomingTestsUpdate />} />
           </Routes>
         </main>
       </div>

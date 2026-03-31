@@ -1,10 +1,14 @@
 import axios from 'axios';
+import { API_BASE, API_TOKEN } from './apiBase';
 
-const API_URL = 'http://localhost:5000/api';
+const apiClient = axios.create({
+  baseURL: API_BASE,
+  headers: API_TOKEN ? { 'X-API-Token': API_TOKEN } : {},
+});
 
 export const fetchInvoices = async () => {
   try {
-    const response = await axios.get(`${API_URL}/invoices`);
+    const response = await apiClient.get('/invoices');
     return response.data;
   } catch (error) {
     console.error('Error fetching invoices:', error);
@@ -14,7 +18,7 @@ export const fetchInvoices = async () => {
 
 export const updateInvoice = async (invoiceId, note, actionDate) => {
   try {
-    const response = await axios.post(`${API_URL}/invoices/update`, {
+    const response = await apiClient.post('/invoices/update', {
       invoiceId,
       note,
       actionDate
@@ -29,7 +33,7 @@ export const updateInvoice = async (invoiceId, note, actionDate) => {
 // src/services/api.js
 export const downloadInvoices = async () => {
   try {
-    const response = await axios.get(`${API_URL}/invoices/download`, {
+    const response = await apiClient.get('/invoices/download', {
       responseType: 'blob'  // Important for handling file downloads
     });
     
@@ -51,7 +55,7 @@ export const downloadInvoices = async () => {
 // Add these to src/services/api.js
 export const fetchQuotes = async () => {
   try {
-    const response = await axios.get(`${API_URL}/quotes`);
+    const response = await apiClient.get('/quotes');
     return response.data;
   } catch (error) {
     console.error('Error fetching quotes:', error);
@@ -61,7 +65,7 @@ export const fetchQuotes = async () => {
 
 export const updateQuote = async (quoteId, note, actionDate) => {
   try {
-    const response = await axios.post(`${API_URL}/quotes/update`, {
+    const response = await apiClient.post('/quotes/update', {
       quoteId,
       note,
       actionDate

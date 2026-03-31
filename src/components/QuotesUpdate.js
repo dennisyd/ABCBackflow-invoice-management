@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Papa from 'papaparse';
+import { apiFetch } from '../services/apiBase';
 
 const extractText = (html) => {
   try {
@@ -70,7 +71,7 @@ const QuotesUpdate = () => {
     setIsUpdating(true);
     try {
       // Step 1: Upload data to staging
-      const stagingResponse = await fetch('http://localhost:5000/api/quotes/staging', {
+      const stagingResponse = await apiFetch('/quotes/staging', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +89,7 @@ const QuotesUpdate = () => {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Step 2: Sync database (delete outdated and insert new quotes)
-      const syncResponse = await fetch('http://localhost:5000/api/quotes/update-from-staging', {
+      const syncResponse = await apiFetch('/quotes/update-from-staging', {
         method: 'POST',
       });
 

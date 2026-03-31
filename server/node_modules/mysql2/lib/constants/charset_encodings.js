@@ -312,5 +312,6 @@ module.exports = [
   'utf8',
   'utf8',
   'utf8',
-  'utf8'
+  'utf8',
+  'utf8',
 ];

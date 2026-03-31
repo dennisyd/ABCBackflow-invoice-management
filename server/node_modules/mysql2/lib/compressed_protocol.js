@@ -6,6 +6,32 @@
 const zlib = require('zlib');
 const PacketParser = require('./packet_parser.js');
 
+class Queue {
+  constructor() {
+    this._queue = [];
+    this._running = false;
+  }
+
+  push(fn) {
+    this._queue.push(fn);
+    if (!this._running) {
+      this._running = true;
+      process.nextTick(() => this._next());
+    }
+  }
+
+  _next() {
+    const task = this._queue.shift();
+    if (!task) {
+      this._running = false;
+      return;
+    }
+    task({
+      done: () => process.nextTick(() => this._next()),
+    });
+  }
+}
+
 function handleCompressedPacket(packet) {
   // eslint-disable-next-line consistent-this, no-invalid-this
   const connection = this;
@@ -13,7 +39,7 @@ function handleCompressedPacket(packet) {
   const body = packet.readBuffer();
 
   if (deflatedLength !== 0) {
-    connection.inflateQueue.push(task => {
+    connection.inflateQueue.push((task) => {
       zlib.inflate(body, (err, data) => {
         if (err) {
           connection._handleNetworkError(err);
@@ -25,7 +51,7 @@ function handleCompressedPacket(packet) {
       });
     });
   } else {
-    connection.inflateQueue.push(task => {
+    connection.inflateQueue.push((task) => {
       connection._bumpCompressedSequenceId(packet.numPackets);
       connection._inflatedPacketsParser.execute(body);
       task.done();
@@ -62,8 +88,8 @@ function writeCompressed(buffer) {
   // seqqueue is used here because zlib async execution is routed via thread pool
   // internally and when we have multiple compressed packets arriving we need
   // to assemble uncompressed result sequentially
-  (function(seqId) {
-    connection.deflateQueue.push(task => {
+  (function (seqId) {
+    connection.deflateQueue.push((task) => {
       zlib.deflate(buffer, (err, compressed) => {
         if (err) {
           connection._handleFatalError(err);
@@ -106,22 +132,22 @@ function enableCompression(connection) {
   connection._lastReceivedPacketId = 0;
 
   connection._handleCompressedPacket = handleCompressedPacket;
-  connection._inflatedPacketsParser = new PacketParser(p => {
+  connection._inflatedPacketsParser = new PacketParser((p) => {
     connection.handlePacket(p);
   }, 4);
   connection._inflatedPacketsParser._lastPacket = 0;
-  connection.packetParser = new PacketParser(packet => {
+  connection.packetParser = new PacketParser((packet) => {
     connection._handleCompressedPacket(packet);
   }, 7);
 
   connection.writeUncompressed = connection.write;
   connection.write = writeCompressed;
 
-  const seqqueue = require('seq-queue');
-  connection.inflateQueue = seqqueue.createQueue();
-  connection.deflateQueue = seqqueue.createQueue();
+  connection.inflateQueue = new Queue();
+  connection.deflateQueue = new Queue();
 }
 
 module.exports = {
-  enableCompression: enableCompression
+  enableCompression: enableCompression,
+  Queue: Queue,
 };

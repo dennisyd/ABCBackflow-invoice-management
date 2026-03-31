@@ -27,6 +27,16 @@ const Sidebar = () => {
               Quotes Update
             </Link>
           </li>
+          <li>
+            <Link to="/upcoming-tests" className="block p-2 hover:bg-blue-700 rounded">
+              Upcoming Tests
+            </Link>
+          </li>
+          <li>
+            <Link to="/upcoming-tests-update" className="block p-2 hover:bg-blue-700 rounded">
+              Upcoming Tests Update
+            </Link>
+          </li>
         </ul>
       </nav>
     </div>
