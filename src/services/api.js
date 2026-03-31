@@ -56,7 +56,7 @@ export const downloadInvoices = async () => {
 // Add these to src/services/api.js
 export const fetchQuotes = async () => {
   try {
-    const response = await apiClient.get('/quotes');
+    const response = await apiClient.get('/quotes', { params: { _: Date.now() } });
     return response.data;
   } catch (error) {
     console.error('Error fetching quotes:', error);

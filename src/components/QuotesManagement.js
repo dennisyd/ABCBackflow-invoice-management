@@ -69,7 +69,9 @@ const QuotesManagement = () => {
 
       // Restore the selected quote from localStorage, if available
       const lastSelectedQuote = localStorage.getItem('selectedQuote');
-      const validLastQuote = data.find((q) => q.Quote === lastSelectedQuote);
+      // Use String() on both sides: PDO returns Quote as a JS number but
+      // localStorage always returns a string, so strict === would never match.
+      const validLastQuote = data.find((q) => String(q.Quote) === String(lastSelectedQuote));
 
       if (validLastQuote) {
         handleQuoteSelect(lastSelectedQuote, data);

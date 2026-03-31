@@ -61,7 +61,7 @@ const UpcomingTests = () => {
   const fetchUpcomingTests = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await apiFetch('/upcoming-tests');
+      const response = await apiFetch(`/upcoming-tests?_=${Date.now()}`);
       if (!response.ok) {
         throw new Error('Failed to load upcoming tests');
       }
