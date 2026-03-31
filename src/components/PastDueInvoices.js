@@ -5,7 +5,6 @@ import { apiFetch } from '../services/apiBase';
 
 const PastDueInvoices = () => {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [uploadedData, setUploadedData] = useState(null);
   const [sortedData, setSortedData] = useState(null);
   const [error, setError] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -42,7 +41,6 @@ const PastDueInvoices = () => {
           return dateB - dateA;
         });
 
-        setUploadedData(jsonData);
         setSortedData(sorted);
         setError(null);
       } catch (error) {
@@ -92,7 +90,6 @@ const PastDueInvoices = () => {
       // Optionally refresh the data or clear the form
       setSelectedFile(null);
       setSortedData(null);
-      setUploadedData(null);
     } catch (error) {
       console.error('Error updating database:', error);
       alert('Failed to update the database: ' + error.message);
@@ -148,7 +145,6 @@ const PastDueInvoices = () => {
             <button onClick={() => {
               setSelectedFile(null);
               setSortedData(null);
-              setUploadedData(null);
             }} className="text-gray-500 hover:text-gray-700">
               <svg
                 className="w-5 h-5"

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '../services/apiBase';
 
 const COLUMNS = [
@@ -53,7 +53,7 @@ const UpcomingTests = () => {
   const [actionDate, setActionDate] = useState('');
   const [serialQuery, setSerialQuery] = useState('');
 
-  const fetchUpcomingTests = async () => {
+  const fetchUpcomingTests = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiFetch('/upcoming-tests');
@@ -77,11 +77,11 @@ const UpcomingTests = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchUpcomingTests();
-  }, []);
+  }, [fetchUpcomingTests]);
 
   const applySelection = (test) => {
     if (!test) return;

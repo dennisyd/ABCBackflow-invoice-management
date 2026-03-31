@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fetchQuotes, updateQuote } from '../services/api';
 import { apiFetch } from '../services/apiBase';
 
@@ -12,11 +12,35 @@ const QuotesManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadQuotes();
+  const handleQuoteSelect = useCallback((quoteId, quoteList) => {
+    const selected = quoteList.find((q) => String(q.Quote) === String(quoteId));
+    if (selected) {
+      setSelectedQuote(quoteId);
+      setQuoteQuery(String(quoteId));
+      setSelectedCustomer(selected.Name || '');
+      setNote(selected.Note || '');
+
+      // Automatically set Action Date 3 months ahead if missing
+      const threeMonthsAhead = new Date();
+      threeMonthsAhead.setMonth(threeMonthsAhead.getMonth() + 3);
+      const formattedDate = threeMonthsAhead.toISOString().split('T')[0];
+
+      setActionDate(
+        selected['Action Date']
+          ? new Date(selected['Action Date']).toISOString().split('T')[0]
+          : formattedDate
+      );
+
+      if (!selected['Action Date']) {
+        alert(`Action Date was missing. Automatically set to ${formattedDate}`);
+      }
+
+      localStorage.setItem('selectedQuote', quoteId);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, []);
 
-  const loadQuotes = async () => {
+  const loadQuotes = useCallback(async () => {
     try {
       let data = await fetchQuotes();
 
@@ -58,35 +82,11 @@ const QuotesManagement = () => {
       setError('Failed to load quotes');
       setLoading(false);
     }
-  };
+  }, [handleQuoteSelect]);
 
-  const handleQuoteSelect = (quoteId, quoteList = quotes) => {
-    const selected = quoteList.find((q) => String(q.Quote) === String(quoteId));
-    if (selected) {
-      setSelectedQuote(quoteId);
-      setQuoteQuery(String(quoteId));
-      setSelectedCustomer(selected.Name || '');
-      setNote(selected.Note || '');
-
-      // Automatically set Action Date 3 months ahead if missing
-      const threeMonthsAhead = new Date();
-      threeMonthsAhead.setMonth(threeMonthsAhead.getMonth() + 3);
-      const formattedDate = threeMonthsAhead.toISOString().split('T')[0];
-
-      setActionDate(
-        selected['Action Date']
-          ? new Date(selected['Action Date']).toISOString().split('T')[0]
-          : formattedDate
-      );
-
-      if (!selected['Action Date']) {
-        alert(`Action Date was missing. Automatically set to ${formattedDate}`);
-      }
-
-      localStorage.setItem('selectedQuote', quoteId);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
+  useEffect(() => {
+    loadQuotes();
+  }, [loadQuotes]);
 
   const handleQuoteInputChange = (e) => {
     const value = e.target.value;
@@ -236,7 +236,7 @@ const QuotesManagement = () => {
                 <tr
                   key={quote.Quote}
                   className="hover:bg-gray-100 cursor-pointer"
-                  onDoubleClick={() => handleQuoteSelect(quote.Quote)}
+                  onDoubleClick={() => handleQuoteSelect(quote.Quote, quotes)}
                 >
                   <td className="border p-3">{quote.Quote}</td>
                   <td className="border p-3">{quote.Name}</td>

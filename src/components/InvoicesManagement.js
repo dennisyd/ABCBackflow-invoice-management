@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fetchInvoices, updateInvoice } from '../services/api';
 import { apiFetch } from '../services/apiBase';
 
@@ -12,11 +12,28 @@ const InvoicesManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadInvoices();
+  const handleInvoiceSelect = useCallback((invoiceId, invoiceList) => {
+    const selected = invoiceList.find((inv) => String(inv.Invoice) === String(invoiceId));
+    if (selected) {
+      setSelectedInvoice(invoiceId);
+      setInvoiceQuery(String(invoiceId));
+      setSelectedCustomer(selected['Customer Name'] || '');
+      setNote(selected.Note || '');
+      setActionDate(
+        selected['Action Date']
+          ? new Date(selected['Action Date']).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0]
+      );
+
+      // Save the selected invoice to localStorage
+      localStorage.setItem('selectedInvoice', invoiceId);
+
+      // Scroll to the top when an invoice is selected
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, []);
 
-  const loadInvoices = async () => {
+  const loadInvoices = useCallback(async () => {
     try {
       let data = await fetchInvoices();
 
@@ -51,28 +68,11 @@ const InvoicesManagement = () => {
       setError('Failed to load invoices');
       setLoading(false);
     }
-  };
+  }, [handleInvoiceSelect]);
 
-  const handleInvoiceSelect = (invoiceId, invoiceList = invoices) => {
-    const selected = invoiceList.find((inv) => String(inv.Invoice) === String(invoiceId));
-    if (selected) {
-      setSelectedInvoice(invoiceId);
-      setInvoiceQuery(String(invoiceId));
-      setSelectedCustomer(selected['Customer Name'] || '');
-      setNote(selected.Note || '');
-      setActionDate(
-        selected['Action Date']
-          ? new Date(selected['Action Date']).toISOString().split('T')[0]
-          : new Date().toISOString().split('T')[0]
-      );
-
-      // Save the selected invoice to localStorage
-      localStorage.setItem('selectedInvoice', invoiceId);
-
-      // Scroll to the top when an invoice is selected
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
+  useEffect(() => {
+    loadInvoices();
+  }, [loadInvoices]);
 
   const handleUpdate = async () => {
     try {
@@ -240,7 +240,7 @@ const InvoicesManagement = () => {
                 <tr
                   key={invoice.Invoice}
                   className="hover:bg-gray-100 cursor-pointer"
-                  onDoubleClick={() => handleInvoiceSelect(invoice.Invoice)}
+                  onDoubleClick={() => handleInvoiceSelect(invoice.Invoice, invoices)}
                 >
                   <td className="border p-3">{invoice.Invoice}</td>
                   <td className="border p-3">{invoice['Due Date']}</td>
