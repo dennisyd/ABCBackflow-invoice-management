@@ -381,11 +381,35 @@ app.post('/api/past-due/update', async (req, res) => {
   try {
     const connection = await pool.getConnection();
 
+    // Remove invoices no longer in the file
     await connection.execute(`
       DELETE FROM ABC_Invoices 
       WHERE Invoice NOT IN (SELECT Invoice FROM Staging)
     `);
 
+    // Update billing columns on existing invoices (Note/Action Date excluded to preserve staff edits)
+    await connection.execute(`
+      UPDATE ABC_Invoices ai
+      JOIN Staging s ON ai.Invoice = s.Invoice
+      SET
+        ai.\`Due Date\`                 = s.\`Due Date\`,
+        ai.\`Customer Name\`            = s.\`Customer Name\`,
+        ai.\`Service Location\`         = s.\`Service Location\`,
+        ai.\`Rows\`                     = s.\`Rows\`,
+        ai.\`Customer Email\`           = s.\`Customer Email\`,
+        ai.\`PO Number\`                = s.\`PO Number\`,
+        ai.\`Phone 1\`                  = s.\`Phone 1\`,
+        ai.\`Phone 2\`                  = s.\`Phone 2\`,
+        ai.\`Total Amount\`             = s.\`Total Amount\`,
+        ai.\`Customer Address\`         = s.\`Customer Address\`,
+        ai.\`Service Location Contact\` = s.\`Service Location Contact\`,
+        ai.\`Service Location Phone\`   = s.\`Service Location Phone\`,
+        ai.\`Parent Customer Name\`     = s.\`Parent Customer Name\`,
+        ai.\`Parent Customer Phone\`    = s.\`Parent Customer Phone\`,
+        ai.\`Parent Customer Address\`  = s.\`Parent Customer Address\`
+    `);
+
+    // Insert brand-new invoices from the file
     await connection.execute(`
       INSERT INTO ABC_Invoices (
         \`Invoice\`, \`Due Date\`, \`Note\`, \`Action Date\`, \`Customer Name\`, \`Service Location\`,

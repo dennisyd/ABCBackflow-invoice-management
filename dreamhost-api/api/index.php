@@ -162,9 +162,33 @@ try {
     }
 
     if ($route === '/past-due/update' && $method === 'POST') {
+        // Remove invoices no longer in the file
         $pdo->exec('DELETE FROM ABC_Invoices WHERE Invoice NOT IN (SELECT Invoice FROM Staging)');
-        // Explicit column list so Note/Action Date saved by staff are never overwritten
-        // by a re-upload; only the source-of-truth columns from billing are synced.
+
+        // Update billing columns on existing invoices.
+        // Note and Action Date are intentionally excluded so staff edits are never overwritten.
+        $pdo->exec('
+            UPDATE ABC_Invoices ai
+            JOIN Staging s ON ai.Invoice = s.Invoice
+            SET
+                ai.`Due Date`                 = s.`Due Date`,
+                ai.`Customer Name`            = s.`Customer Name`,
+                ai.`Service Location`         = s.`Service Location`,
+                ai.`Rows`                     = s.`Rows`,
+                ai.`Customer Email`           = s.`Customer Email`,
+                ai.`PO Number`                = s.`PO Number`,
+                ai.`Phone 1`                  = s.`Phone 1`,
+                ai.`Phone 2`                  = s.`Phone 2`,
+                ai.`Total Amount`             = s.`Total Amount`,
+                ai.`Customer Address`         = s.`Customer Address`,
+                ai.`Service Location Contact` = s.`Service Location Contact`,
+                ai.`Service Location Phone`   = s.`Service Location Phone`,
+                ai.`Parent Customer Name`     = s.`Parent Customer Name`,
+                ai.`Parent Customer Phone`    = s.`Parent Customer Phone`,
+                ai.`Parent Customer Address`  = s.`Parent Customer Address`
+        ');
+
+        // Insert brand-new invoices from the file
         $pdo->exec('
             INSERT INTO ABC_Invoices (
                 `Invoice`, `Due Date`, `Note`, `Action Date`, `Customer Name`, `Service Location`,
@@ -180,6 +204,7 @@ try {
             FROM Staging
             WHERE Invoice NOT IN (SELECT Invoice FROM ABC_Invoices)
         ');
+
         write_request_log(200, 'past_due_sync_complete');
         json_response(['success' => true]);
     }
