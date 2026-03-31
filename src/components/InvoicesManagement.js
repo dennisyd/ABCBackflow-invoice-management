@@ -76,10 +76,35 @@ const InvoicesManagement = () => {
 
   const handleUpdate = async () => {
     try {
-      await updateInvoice(selectedInvoice, note, actionDate);
+      const response = await updateInvoice(selectedInvoice, note, actionDate);
+
+      if (response?.record) {
+        const updatedRecord = {
+          ...response.record,
+          'Due Date': response.record['Due Date']
+            ? new Date(response.record['Due Date']).toLocaleDateString('en-US')
+            : '',
+          'Action Date': response.record['Action Date']
+            ? new Date(response.record['Action Date']).toLocaleDateString('en-US')
+            : '',
+        };
+
+        setInvoices((currentInvoices) =>
+          currentInvoices.map((invoice) =>
+            String(invoice.Invoice) === String(selectedInvoice) ? updatedRecord : invoice
+          )
+        );
+
+        handleInvoiceSelect(selectedInvoice, [updatedRecord, ...invoices.filter((invoice) => String(invoice.Invoice) !== String(selectedInvoice))]);
+      }
+
       await loadInvoices();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      alert('Invoice updated successfully!');
+      alert(
+        response?.record
+          ? `Invoice updated successfully.\nSaved note: ${response.record.Note || ''}\nSaved action date: ${response.record['Action Date'] || ''}`
+          : 'Invoice updated successfully!'
+      );
     } catch (error) {
       alert('Failed to update invoice: ' + error.message);
     }

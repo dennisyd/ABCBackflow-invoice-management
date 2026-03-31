@@ -31,17 +31,28 @@ try {
 
     if ($route === '/invoices/update' && $method === 'POST') {
         $body = request_json_body();
+        $invoiceId = $body['invoiceId'] ?? '';
+        $existsStmt = $pdo->prepare('SELECT 1 FROM `ABC_Invoices` WHERE `Invoice` = ? LIMIT 1');
+        $existsStmt->execute([$invoiceId]);
+        if (!$existsStmt->fetchColumn()) {
+            json_response(['error' => 'Invoice not found'], 404);
+        }
         $stmt = $pdo->prepare('UPDATE `ABC_Invoices` SET `Note` = ?, `Action Date` = ? WHERE `Invoice` = ?');
         $stmt->execute([
             $body['note'] ?? '',
             parse_date_or_null($body['actionDate'] ?? null),
-            $body['invoiceId'] ?? '',
+            $invoiceId,
         ]);
-        if ($stmt->rowCount() === 0) {
-            json_response(['error' => 'No invoice was updated'], 404);
-        }
+        $updatedStmt = $pdo->prepare('SELECT * FROM `ABC_Invoices` WHERE `Invoice` = ? LIMIT 1');
+        $updatedStmt->execute([$invoiceId]);
+        $updatedRow = $updatedStmt->fetch() ?: null;
         write_request_log(200, 'invoice_updated');
-        json_response(['success' => true, 'message' => 'Invoice updated successfully']);
+        json_response([
+            'success' => true,
+            'message' => 'Invoice updated successfully',
+            'rowCount' => $stmt->rowCount(),
+            'record' => $updatedRow,
+        ]);
     }
 
     if ($route === '/invoices/download' && $method === 'GET') {
@@ -110,17 +121,28 @@ try {
 
     if ($route === '/quotes/update' && $method === 'POST') {
         $body = request_json_body();
+        $quoteId = $body['quoteId'] ?? '';
+        $existsStmt = $pdo->prepare('SELECT 1 FROM `Quotes` WHERE `Quote` = ? LIMIT 1');
+        $existsStmt->execute([$quoteId]);
+        if (!$existsStmt->fetchColumn()) {
+            json_response(['error' => 'Quote not found'], 404);
+        }
         $stmt = $pdo->prepare('UPDATE `Quotes` SET `Note` = ?, `Action Date` = ? WHERE `Quote` = ?');
         $stmt->execute([
             $body['note'] ?? '',
             parse_date_or_null($body['actionDate'] ?? null),
-            $body['quoteId'] ?? '',
+            $quoteId,
         ]);
-        if ($stmt->rowCount() === 0) {
-            json_response(['error' => 'No quote was updated'], 404);
-        }
+        $updatedStmt = $pdo->prepare('SELECT * FROM `Quotes` WHERE `Quote` = ? LIMIT 1');
+        $updatedStmt->execute([$quoteId]);
+        $updatedRow = $updatedStmt->fetch() ?: null;
         write_request_log(200, 'quote_updated');
-        json_response(['success' => true, 'message' => 'Quote updated successfully']);
+        json_response([
+            'success' => true,
+            'message' => 'Quote updated successfully',
+            'rowCount' => $stmt->rowCount(),
+            'record' => $updatedRow,
+        ]);
     }
 
     if ($route === '/quotes/download' && $method === 'GET') {
@@ -202,6 +224,17 @@ try {
             json_response(['error' => 'Serial, Customer Address Line 1, and Assembly Location are required'], 400);
         }
 
+        $existsStmt = $pdo->prepare('
+            SELECT 1
+            FROM `UpcomingTests`
+            WHERE `Serial` = ? AND `Customer Address Line 1` = ? AND `Assembly Location` = ?
+            LIMIT 1
+        ');
+        $existsStmt->execute([$serial, $customerAddressLine1, $assemblyLocation]);
+        if (!$existsStmt->fetchColumn()) {
+            json_response(['error' => 'Upcoming test row not found'], 404);
+        }
+
         $stmt = $pdo->prepare('
             UPDATE `UpcomingTests`
             SET `Note` = ?, `Action Date` = ?
@@ -214,11 +247,20 @@ try {
             $customerAddressLine1,
             $assemblyLocation,
         ]);
-        if ($stmt->rowCount() === 0) {
-            json_response(['error' => 'No upcoming test row was updated'], 404);
-        }
+        $updatedStmt = $pdo->prepare('
+            SELECT *
+            FROM `UpcomingTests`
+            WHERE `Serial` = ? AND `Customer Address Line 1` = ? AND `Assembly Location` = ?
+            LIMIT 1
+        ');
+        $updatedStmt->execute([$serial, $customerAddressLine1, $assemblyLocation]);
+        $updatedRow = $updatedStmt->fetch() ?: null;
         write_request_log(200, 'upcoming_test_updated');
-        json_response(['success' => true]);
+        json_response([
+            'success' => true,
+            'rowCount' => $stmt->rowCount(),
+            'record' => $updatedRow,
+        ]);
     }
 
     if ($route === '/upcoming-tests/staging' && $method === 'POST') {
