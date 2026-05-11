@@ -209,8 +209,35 @@ function format_us_date($value): string
         return '';
     }
 
+    $v = trim((string) $value);
+    if ($v === '') {
+        return '';
+    }
+
+    // Try explicit formats so 2-digit years are handled predictably.
+    // PHP's createFromFormat with 'y' expands 00-69 → 2000-2069, 70-99 → 1970-1999.
+    $formats = [
+        'n/j/Y',  // 3/18/2026
+        'm/d/Y',  // 03/18/2026
+        'n/j/y',  // 3/18/26
+        'm/d/y',  // 03/18/26
+        'n-j-Y',  // 3-18-2026
+        'm-d-Y',  // 03-18-2026
+        'n-j-y',  // 3-18-26
+        'm-d-y',  // 03-18-26
+        'Y-m-d',  // 2026-03-18 (ISO)
+    ];
+
+    foreach ($formats as $fmt) {
+        $dt = DateTime::createFromFormat($fmt, $v);
+        if ($dt instanceof DateTime) {
+            return $dt->format('n/j/Y');
+        }
+    }
+
+    // Last-resort fallback using PHP's generic parser
     try {
-        return (new DateTime((string) $value))->format('n/j/Y');
+        return (new DateTime($v))->format('n/j/Y');
     } catch (Throwable $e) {
         return '';
     }

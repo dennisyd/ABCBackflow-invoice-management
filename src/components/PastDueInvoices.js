@@ -25,11 +25,14 @@ const PastDueInvoices = () => {
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
+        // cellDates: true converts Excel date serial numbers to JS Date objects
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
+        // dateNF forces all date cells to output as MM/DD/YYYY (4-digit year)
         const jsonData = XLSX.utils.sheet_to_json(worksheet, {
           raw: false,
+          dateNF: 'mm/dd/yyyy',
         });
 
         console.log('Processed Data:', jsonData);
