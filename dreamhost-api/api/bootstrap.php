@@ -231,6 +231,11 @@ function format_us_date($value): string
     foreach ($formats as $fmt) {
         $dt = DateTime::createFromFormat($fmt, $v);
         if ($dt instanceof DateTime) {
+            // Skip if the year is implausibly small — means a 2-digit year was
+            // fed into a 4-digit format (e.g. "26" parsed as year 26 AD).
+            if ((int) $dt->format('Y') < 100) {
+                continue;
+            }
             return $dt->format('n/j/Y');
         }
     }
